@@ -35,6 +35,8 @@ import comfy.samplers
 import comfy.sd
 import comfy.utils
 import comfy.latent_formats
+import json
+import os
 sys.path.remove(comfy_dir)
 
 # Append my_dir to sys.path & import files
@@ -956,6 +958,7 @@ class TSC_KSampler:
                 "VAE",
             ]
             conditioners = {
+                "Style Prompt S/R"
                 "Positive Prompt S/R",
                 "Negative Prompt S/R",
                 "AScore+",
@@ -1135,6 +1138,18 @@ class TSC_KSampler:
                     vae_name = var
                     vae_filename = os.path.splitext(os.path.basename(vae_name))[0]
                     text = f"VAE: {vae_filename}"
+
+                # If var_type is "Style Prompt S/R", update positive_prompt and negative_prompt and generate labels
+                elif var_type == "Style Prompt S/R":
+                    style_name, template = var
+                    if template != None:
+                        positive_prompt = (template['prompt'].replace("{prompt}", positive_prompt[1], 1), positive_prompt[1])
+                        json_negative_prompt = template.get('negative_prompt', "")
+                        negative_prompt = (f"{json_negative_prompt}, {negative_prompt[1]}" if json_negative_prompt and negative_prompt[1] else json_negative_prompt or negative_prompt[1],negative_prompt[1])
+                    else:
+                        positive_prompt = (positive_prompt[1], positive_prompt[1])
+                        negative_prompt = (negative_prompt[1], negative_prompt[1])
+                    text = f"{style_name}"
 
                 # If var_type is "Positive Prompt S/R", update positive_prompt and generate labels
                 elif var_type == "Positive Prompt S/R":
@@ -1363,13 +1378,13 @@ class TSC_KSampler:
                     encode_refiner = True
 
                 # Encode base prompt if required
-                encode_types = ["Positive Prompt S/R", "Negative Prompt S/R", "Clip Skip", "ControlNetStrength",
+                encode_types = ["Style Prompt S/R","Positive Prompt S/R", "Negative Prompt S/R", "Clip Skip", "ControlNetStrength",
                                 "ControlNetStart%",  "ControlNetEnd%"]
                 if (X_type in encode_types and index == 0) or Y_type in encode_types:
                     encode = True
 
                 # Encode refiner prompt if required
-                encode_refiner_types = ["Positive Prompt S/R", "Negative Prompt S/R", "AScore+", "AScore-",
+                encode_refiner_types = ["Style Prompt S/R","Positive Prompt S/R", "Negative Prompt S/R", "AScore+", "AScore-",
                                         "Clip Skip (Refiner)"]
                 if (X_type in encode_refiner_types and index == 0) or Y_type in encode_refiner_types:
                     encode_refiner = True
@@ -1877,6 +1892,13 @@ class TSC_KSampler:
                          enumerate(Y_value)]) if Y_type == "Negative Prompt S/R" else negative_prompt
                     print(f"-prompt_s/r: {negative_prompt}")
 
+                if X_type == "Style Prompt S/R" or Y_type == "Style Prompt S/R":
+                    style_prompt = ", ".join([str(x[0]) if i == 0 else str(x[1]) for i, x in enumerate(
+                        X_value)]) if X_type == "Style Prompt S/R" else ", ".join(
+                        [str(y[0]) if i == 0 else str(y[1]) for i, y in
+                         enumerate(Y_value)]) if Y_type == "Style Prompt S/R" else style_prompt
+                    print(f"-prompt_style: {style_prompt}")
+
                 if "ControlNet" in X_type or "ControlNet" in Y_type:
                     cnet_strength,  cnet_start_pct, cnet_end_pct = cnet_stack[1]
 
@@ -2375,7 +2397,7 @@ class TSC_XYplot:
         encode_types = {
             "Checkpoint", "Refiner",
             "LoRA", "LoRA Batch", "LoRA Wt", "LoRA MStr", "LoRA CStr",
-            "Positive Prompt S/R", "Negative Prompt S/R",
+            "Positive Prompt S/R", "Negative Prompt S/R","Style Prompt S/R"
             "AScore+", "AScore-",
             "Clip Skip", "Clip Skip (Refiner)",
             "ControlNetStrength", "ControlNetStart%", "ControlNetEnd%"
@@ -2731,6 +2753,49 @@ class TSC_XYplot_PromptSR:
             xy_values.extend([(search_txt, kwargs.get(f"replace_{i+1}")) for i in range(replace_count)])
 
         return ((xy_type, xy_values),)
+
+#=======================================================================================================================
+# TSC XY Plot: Prompt Styles
+class TSC_XYplot_PromptStyles:
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(self):
+        current_directory = os.path.dirname(os.path.realpath(__file__))
+        style_directory = os.path.join(os.path.dirname(current_directory),"sdxl_prompt_styler")
+        self.json_data, styles = load_styles_from_directory(style_directory)
+
+        inputs = {
+            "required": {
+                "style_count": ("INT", {"default": XYPLOT_DEF, "min": 0, "max": XYPLOT_LIM-1, "step": 1}),
+            }
+        }
+
+        # Dynamically add style_X inputs
+        for i in range(1, XYPLOT_LIM):
+            inputs["required"][f"style_{i}"] = (styles,)
+
+        return inputs
+
+    RETURN_TYPES = ("XY",)
+    RETURN_NAMES = ("X or Y",)
+    FUNCTION = "xy_value"
+    CATEGORY = "Efficiency Nodes/XY Inputs"
+
+    def xy_value(self, style_count, **kwargs):
+        xy_type = "Style Prompt S/R"
+
+        xy_values = []
+
+        if style_count > 0:
+            # Append additional entries based on replace_count
+            for i in range(1, style_count +1):
+                style_name = kwargs.get(f"style_{i}")
+                xy_values.extend([(style_name, find_template_by_name(self.json_data, style_name))])
+
+        return ((xy_type, xy_values),) if xy_values else (None,)
 
 #=======================================================================================================================
 # TSC XY Plot: Aesthetic Score
@@ -3532,7 +3597,7 @@ class TSC_XYplot_Manual_XY_Entry:
     def xy_value(self, plot_type, plot_value):
 
         # Store X values as arrays
-        if plot_type not in {"Positive Prompt S/R", "Negative Prompt S/R", "VAE", "Checkpoint", "LoRA"}:
+        if plot_type not in {"Style Prompt S/R","Positive Prompt S/R", "Negative Prompt S/R", "VAE", "Checkpoint", "LoRA"}:
             plot_value = plot_value.replace(" ", "")  # Remove spaces
         plot_value = plot_value.replace("\n", "")  # Remove newline characters
         plot_value = plot_value.rstrip(";")  # Remove trailing semicolon
@@ -3820,7 +3885,7 @@ class TSC_XYplot_Manual_XY_Entry:
                 plot_value = [','.join(entry) for entry in plot_value]
 
         # Prompt S/R X Cleanup
-        if plot_type in {"Positive Prompt S/R", "Negative Prompt S/R"}:
+        if plot_type in {"Positive Prompt S/R", "Negative Prompt S/R", "Style Prompt S/R"}:
             if plot_value[0] == '':
                 print(f"{error('XY Plot Error:')} Prompt S/R value can not be empty.")
                 return (None,)
@@ -3828,7 +3893,7 @@ class TSC_XYplot_Manual_XY_Entry:
                 plot_value = [(plot_value[0], None) if i == 0 else (plot_value[0], x) for i, x in enumerate(plot_value)]
 
         # Loop over each entry in plot_value and check if it's valid
-        if plot_type not in {"Nothing", "Positive Prompt S/R", "Negative Prompt S/R"}:
+        if plot_type not in {"Nothing", "Positive Prompt S/R", "Negative Prompt S/R", "Style Prompt S/R"}:
             for i in range(len(plot_value)):
                 plot_value[i] = validate_value(plot_value[i], plot_type, bounds)
                 if plot_value[i] == None:
@@ -4006,6 +4071,7 @@ NODE_CLASS_MAPPINGS = {
     "XY Input: Denoise": TSC_XYplot_Denoise,
     "XY Input: VAE": TSC_XYplot_VAE,
     "XY Input: Prompt S/R": TSC_XYplot_PromptSR,
+    "XY Input: Prompt Styles": TSC_XYplot_PromptStyles,
     "XY Input: Aesthetic Score": TSC_XYplot_AScore,
     "XY Input: Refiner On/Off": TSC_XYplot_Refiner_OnOff,
     "XY Input: Checkpoint": TSC_XYplot_Checkpoint,
@@ -4282,3 +4348,96 @@ try:
 
 except ImportError:
     print(f"{warning('Efficiency Nodes Warning:')} Failed to import python package 'simpleeval'; related nodes disabled.\n")
+
+
+def read_json_file(file_path):
+    """
+    Reads a JSON file's content and returns it.
+    Ensures content matches the expected format.
+    """
+    if not os.access(file_path, os.R_OK):
+        print(f"Warning: No read permissions for file {file_path}")
+        return None
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            content = json.load(file)
+            # Check if the content matches the expected format.
+            if not all(['name' in item and 'prompt' in item and 'negative_prompt' in item for item in content]):
+                print(f"Warning: Invalid content in file {file_path}")
+                return None
+            return content
+    except Exception as e:
+        print(f"An error occurred while reading {file_path}: {str(e)}")
+        return None
+
+
+def read_sdxl_styles(json_data):
+    """
+    Returns style names from the provided JSON data.
+    """
+    if not isinstance(json_data, list):
+        print("Error: input data must be a list")
+        return []
+
+    return [item['name'] for item in json_data if isinstance(item, dict) and 'name' in item]
+
+
+def get_all_json_files(directory):
+    """
+    Returns all JSON files from the specified directory.
+    """
+    return [os.path.join(directory, file) for file in os.listdir(directory) if
+            file.endswith('.json') and os.path.isfile(os.path.join(directory, file))]
+
+
+def load_styles_from_directory(directory):
+    """
+    Loads styles from all JSON files in the directory.
+    Renames duplicate style names by appending a suffix.
+    """
+    json_files = get_all_json_files(directory)
+    combined_data = []
+    seen = set()
+
+    for json_file in json_files:
+        json_data = read_json_file(json_file)
+        if json_data:
+            for item in json_data:
+                original_style = item['name']
+                style = original_style
+                suffix = 1
+                while style in seen:
+                    style = f"{original_style}_{suffix}"
+                    suffix += 1
+                item['name'] = style
+                seen.add(style)
+                combined_data.append(item)
+
+    unique_style_names = [item['name'] for item in combined_data if isinstance(item, dict) and 'name' in item]
+
+    return combined_data, unique_style_names
+
+
+def validate_json_data(json_data):
+    """
+    Validates the structure of the JSON data.
+    """
+    if not isinstance(json_data, list):
+        return False
+    for template in json_data:
+        if 'name' not in template or 'prompt' not in template:
+            return False
+    return True
+
+
+def find_template_by_name(json_data, template_name):
+    """
+    Returns a template from the JSON data by name or None if not found.
+    """
+    for template in json_data:
+        if template['name'] == template_name:
+            return template
+    return None
+
+#=======================================================================================================================

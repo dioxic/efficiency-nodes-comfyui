@@ -31,6 +31,7 @@ const NODE_COLORS = {
     "XY Input: Denoise": "cyan",
     "XY Input: VAE": "cyan",
     "XY Input: Prompt S/R": "cyan",
+    "XY Input: Prompt Styles": "cyan",
     "XY Input: Aesthetic Score": "cyan",
     "XY Input: Refiner On/Off": "cyan",
     "XY Input: Checkpoint": "cyan",

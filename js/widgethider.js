@@ -258,6 +258,9 @@ const nodeWidgetHandlers = {
     "XY Input: Prompt S/R": {
         'replace_count': handleXYInputPromptSRReplaceCount
     },
+    "XY Input: Prompt Styles": {
+        'style_count': handleXYInputPromptStyleCount
+    },
     "XY Input: Checkpoint": {
         'input_mode': handleXYInputCheckpointInputMode,
         'ckpt_count': handleXYInputCheckpointCkptCount,
@@ -357,6 +360,11 @@ function handleXYInputVAEVaeCount(node, widget) {
 // XY Input: Prompt S/R Handlers
 function handleXYInputPromptSRReplaceCount(node, widget) {
     handleWidgetVisibility(node, widget.value, "replace_", 49);
+}
+
+// XY Input: Prompt Style Handlers
+function handleXYInputPromptStyleCount(node, widget) {
+    handleWidgetVisibility(node, widget.value, "style_", 49);
 }
 
 // XY Input: Checkpoint Handlers
