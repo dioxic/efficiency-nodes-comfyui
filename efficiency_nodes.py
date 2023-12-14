@@ -453,10 +453,10 @@ class TSC_KSampler:
 
         #---------------------------------------------------------------------------------------------------------------
         def vae_decode_latent(vae, samples, vae_decode):
-            return VAEDecodeTiled().decode(vae,samples,512)[0] if "tiled" in vae_decode else VAEDecode().decode(vae,samples)[0]
+            return VAEDecodeTiled().decode(vae,samples,320)[0] if "tiled" in vae_decode else VAEDecode().decode(vae,samples)[0]
 
         def vae_encode_image(vae, pixels, vae_decode):
-            return VAEEncodeTiled().encode(vae,pixels,512)[0] if "tiled" in vae_decode else VAEEncode().encode(vae,pixels)[0]
+            return VAEEncodeTiled().encode(vae,pixels,320)[0] if "tiled" in vae_decode else VAEEncode().encode(vae,pixels)[0]
 
         # ---------------------------------------------------------------------------------------------------------------
         def process_latent_image(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
@@ -1518,9 +1518,11 @@ class TSC_KSampler:
                 elif X_type != "Nothing" and Y_type != "Nothing":
                     for Y_index, Y in enumerate(Y_value):
 
-                        if Y_type == "XY_Capsule" and X_type == "XY_Capsule":
+                        if Y_type == "XY_Capsule" or X_type == "XY_Capsule":
                             model, clip, refiner_model, refiner_clip = \
                                 clone_or_none(original_model, original_clip, original_refiner_model, original_refiner_clip)
+
+                        if Y_type == "XY_Capsule" and X_type == "XY_Capsule":
                             Y.set_x_capsule(X)
 
                         # Define Y parameters and generate labels
@@ -3934,7 +3936,10 @@ class TSC_ImageOverlay:
             overlay_image_size = overlay_image.size()
             overlay_image_size = (overlay_image_size[2], overlay_image_size[1])
             if overlay_resize == "Fit":
-                overlay_image_size = (base_image.size[0],base_image.size[1])
+                h_ratio = base_image.size()[1] / overlay_image_size[1]
+                w_ratio = base_image.size()[2] / overlay_image_size[0]
+                ratio = min(h_ratio, w_ratio)
+                overlay_image_size = tuple(round(dimension * ratio) for dimension in overlay_image_size)
             elif overlay_resize == "Resize by rescale_factor":
                 overlay_image_size = tuple(int(dimension * rescale_factor) for dimension in overlay_image_size)
             elif overlay_resize == "Resize to width & heigth":
@@ -4175,8 +4180,7 @@ class TSC_Tiled_Upscaler:
     @classmethod
     def INPUT_TYPES(cls):
         # Split the list based on the keyword "tile"
-        cnet_tile_filenames = [name for name in folder_paths.get_filename_list("controlnet") if "tile" in name]
-        #cnet_other_filenames = [name for name in folder_paths.get_filename_list("controlnet") if "tile" not in name]
+        cnet_filenames = [name for name in folder_paths.get_filename_list("controlnet")]
 
         return {"required": {"upscale_by": ("FLOAT", {"default": 1.25, "min": 0.01, "max": 8.0, "step": 0.05}),
                              "tile_size": ("INT", {"default": 512, "min": 256, "max": MAX_RESOLUTION, "step": 64}),
@@ -4185,7 +4189,7 @@ class TSC_Tiled_Upscaler:
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                              "denoise": ("FLOAT", {"default": .4, "min": 0.0, "max": 1.0, "step": 0.01}),
                              "use_controlnet": ("BOOLEAN", {"default": False}),
-                             "tile_controlnet": (cnet_tile_filenames,),
+                             "tile_controlnet": (cnet_filenames,),
                              "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
                              },
                 "optional": {"script": ("SCRIPT",)}}
