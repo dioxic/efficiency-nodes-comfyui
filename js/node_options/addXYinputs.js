@@ -13,6 +13,7 @@ function getXYInputNodes() {
         "XY Input: Denoise",
         "XY Input: VAE",
         "XY Input: Prompt S/R",
+        "XY Input: Prompt Styles",
         "XY Input: Aesthetic Score",
         "XY Input: Refiner On/Off",
         "XY Input: Checkpoint",

@@ -4229,6 +4229,7 @@ NODE_CLASS_MAPPINGS = {
     "XY Input: Denoise": TSC_XYplot_Denoise,
     "XY Input: VAE": TSC_XYplot_VAE,
     "XY Input: Prompt S/R": TSC_XYplot_PromptSR,
+    "XY Input: Prompt Styles": TSC_XYplot_PromptStyles,
     "XY Input: Aesthetic Score": TSC_XYplot_AScore,
     "XY Input: Refiner On/Off": TSC_XYplot_Refiner_OnOff,
     "XY Input: Checkpoint": TSC_XYplot_Checkpoint,
